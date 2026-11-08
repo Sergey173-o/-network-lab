@@ -1,0 +1,87 @@
+# Адреса интерфейсов и статические маршруты. Порядок ВМ и линков задаёт их MAC.
+inetRouter:
+  router: true
+  links:
+    inet-central:
+      addresses: [192.168.255.1/30]
+      routes:
+        192.168.0.0/24: 192.168.255.2
+        192.168.1.0/24: 192.168.255.2
+        192.168.2.0/24: 192.168.255.2
+        192.168.255.4/30: 192.168.255.2
+        192.168.255.8/30: 192.168.255.2
+
+centralRouter:
+  router: true
+  links:
+    inet-central:
+      addresses: [192.168.255.2/30]
+      routes:
+        0.0.0.0/0: 192.168.255.1
+    directors:
+      addresses: [192.168.0.1/28]
+    central-hardware:
+      addresses: [192.168.0.33/28]
+    wifi:
+      addresses: [192.168.0.65/26]
+    central-office1:
+      addresses: [192.168.255.9/30]
+      routes:
+        192.168.2.0/24: 192.168.255.10
+    central-office2:
+      addresses: [192.168.255.5/30]
+      routes:
+        192.168.1.0/24: 192.168.255.6
+
+office1Router:
+  router: true
+  links:
+    central-office1:
+      addresses: [192.168.255.10/30]
+      routes:
+        0.0.0.0/0: 192.168.255.9
+    office1-dev:
+      addresses: [192.168.2.1/26]
+    office1-test:
+      addresses: [192.168.2.65/26]
+    office1-managers:
+      addresses: [192.168.2.129/26]
+    office1-hardware:
+      addresses: [192.168.2.193/26]
+
+office2Router:
+  router: true
+  links:
+    central-office2:
+      addresses: [192.168.255.6/30]
+      routes:
+        0.0.0.0/0: 192.168.255.5
+    office2-dev:
+      addresses: [192.168.1.1/25]
+    office2-test:
+      addresses: [192.168.1.129/26]
+    office2-hardware:
+      addresses: [192.168.1.193/26]
+
+centralServer:
+  links:
+    directors:
+      addresses: [192.168.0.2/28]
+      routes:
+        0.0.0.0/0: 192.168.0.1
+
+office1Server:
+  links:
+    office1-managers:
+      addresses: [192.168.2.130/26]
+      routes:
+        0.0.0.0/0: 192.168.2.129
+
+office2Server:
+  links:
+    office2-dev:
+      addresses: [192.168.1.2/25]
+      routes:
+        0.0.0.0/0: 192.168.1.1
+
+# Версия 1 | 2026-11-07 | Адреса семи ВМ, маршруты и исправленная маска Office2 Dev.

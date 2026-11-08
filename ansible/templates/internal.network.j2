@@ -1,0 +1,22 @@
+# Адреса и маршруты одного внутреннего интерфейса.
+[Match]
+MACAddress={{ item.mac }}
+
+[Network]
+IPv6AcceptRA=no
+{% for address in item.addresses %}
+Address={{ address }}
+{% endfor %}
+{% if '0.0.0.0/0' in (item.routes | default({})) %}
+DNS=1.1.1.1
+DNS=8.8.8.8
+Domains=~.
+{% endif %}
+{% for destination, gateway in (item.routes | default({})).items() %}
+
+[Route]
+Destination={{ destination }}
+Gateway={{ gateway }}
+{% endfor %}
+
+# Версия 1 | 2026-11-07 | Статические адреса, маршруты и DNS.

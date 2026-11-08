@@ -1,0 +1,127 @@
+---
+# Применяет постоянную сетевую конфигурацию одной ВМ через SSH Vagrant.
+- name: Настроить сетевую лабораторию
+  hosts: all
+  become: true
+  tasks:
+    - name: Настроить DNSSEC на внутренних ВМ
+      when: not (lab_edge | bool)
+      block:
+        - name: Создать каталог конфигурации резолвера
+          ansible.builtin.file:
+            path: /etc/systemd/resolved.conf.d
+            state: directory
+            mode: '0755'
+
+        - name: Сохранить настройку DNSSEC для лаборатории
+          ansible.builtin.copy:
+            dest: /etc/systemd/resolved.conf.d/99-z-network-lab-client-dnssec.conf
+            mode: '0644'
+            content: |
+              [Resolve]
+              DNSSEC=no
+          register: lab_client_dnssec
+
+        - name: Применить настройки резолвера
+          ansible.builtin.systemd:
+            name: systemd-resolved
+            state: restarted
+          when: lab_client_dnssec.changed
+
+    - name: Подключить настройку DNS centralRouter
+      ansible.builtin.import_tasks: central-dns.yml
+    - name: Проверить сетевой сервис Ubuntu
+      ansible.builtin.command: systemctl is-active systemd-networkd
+      changed_when: false
+
+    - name: Включить IPv4 forwarding на роутерах
+      when: lab_router | bool
+      block:
+        - name: Сохранить настройку ядра
+          ansible.builtin.copy:
+            dest: /etc/sysctl.d/90-network-lab.conf
+            content: "net.ipv4.ip_forward = 1\n"
+            mode: '0644'
+
+        - name: Применить настройку ядра
+          ansible.builtin.command: sysctl -p /etc/sysctl.d/90-network-lab.conf
+          changed_when: false
+
+    - name: Настроить адреса и маршруты на внутренних интерфейсах
+      ansible.builtin.template:
+        src: internal.network.j2
+        dest: "/etc/systemd/network/05-lab-{{ item.segment }}.network"
+        mode: '0644'
+      loop: "{{ lab_links }}"
+      loop_control:
+        label: "{{ item.segment }}"
+
+    - name: Оставить DHCP на NAT, отключив маршруты и DNS от него
+      ansible.builtin.copy:
+        dest: /etc/systemd/network/05-lab-management.network
+        mode: '0644'
+        content: |
+          [Match]
+          MACAddress={{ lab_nat_mac }}
+
+          [Network]
+          DHCP=ipv4
+          IPv6AcceptRA=no
+
+          [DHCPv4]
+          UseRoutes=no
+          UseGateway=no
+          UseDNS=no
+      when: not (lab_edge | bool)
+
+    - name: Настроить выход в интернет на inetRouter
+      when: lab_edge | bool
+      block:
+        - name: Создать каталог настроек DNS
+          ansible.builtin.file:
+            path: /etc/systemd/resolved.conf.d
+            state: directory
+            mode: '0755'
+
+        - name: Настроить DNS VirtualBox на inetRouter
+          ansible.builtin.copy:
+            dest: /etc/systemd/resolved.conf.d/99-network-lab-dns.conf
+            mode: '0644'
+            content: |
+              [Resolve]
+              DNS=10.0.2.3
+              Domains=~.
+              DNSSEC=no
+          register: lab_edge_dns
+
+        - name: Применить настройки DNS
+          ansible.builtin.systemd:
+            name: systemd-resolved
+            state: restarted
+          when: lab_edge_dns.changed
+
+        - name: Установить nftables
+          ansible.builtin.apt:
+            name: nftables
+            state: present
+            update_cache: true
+            cache_valid_time: 3600
+
+        - name: Сохранить правила фильтрации и NAT
+          ansible.builtin.template:
+            src: nftables.conf.j2
+            dest: /etc/nftables.conf
+            mode: '0644'
+            validate: /usr/sbin/nft -c -f %s
+
+        - name: Включить и загрузить правила nftables
+          ansible.builtin.systemd:
+            name: nftables
+            enabled: true
+            state: reloaded
+
+    - name: Перечитать конфигурацию интерфейсов
+      ansible.builtin.command: networkctl reload
+      changed_when: false
+
+# Версия 1 | 2026-11-07 | Настройка networkd, IPv4 forwarding и nftables.

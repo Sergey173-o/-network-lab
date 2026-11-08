@@ -1,0 +1,25 @@
+---
+- name: Настроить DNS на centralRouter
+  become: true
+  when: inventory_hostname == "centralRouter"
+  block:
+    - name: Создать каталог настроек systemd-resolved
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        mode: "0755"
+
+    - name: Отключить локальную проверку DNSSEC в лаборатории
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/99-lab-dnssec.conf
+        content: |
+          [Resolve]
+          DNSSEC=no
+        mode: "0644"
+      register: central_dns_config
+
+    - name: Перезапустить systemd-resolved после изменения
+      ansible.builtin.service:
+        name: systemd-resolved
+        state: restarted
+      when: central_dns_config.changed

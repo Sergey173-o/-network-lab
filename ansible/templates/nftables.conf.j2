@@ -1,0 +1,18 @@
+#!/usr/sbin/nft -f
+# Правила выделенного лабораторного inetRouter.
+flush ruleset
+
+table ip network_lab {
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+        ct state established,related accept
+        oifname "{{ ansible_facts.default_ipv4.interface }}" ip saddr { 192.168.0.0/24, 192.168.1.0/24, 192.168.2.0/24, 192.168.255.0/24 } accept
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "{{ ansible_facts.default_ipv4.interface }}" ip saddr { 192.168.0.0/24, 192.168.1.0/24, 192.168.2.0/24, 192.168.255.0/24 } counter masquerade
+    }
+}
+
+# Версия 1 | 2026-11-07 | Форвардинг в интернет и masquerade на внешнем интерфейсе.
